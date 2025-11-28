@@ -9,6 +9,7 @@ megatron-energon==5.0.0
 nltk==3.9.1
 omegaconf==2.3.0
 pandarallel==1.6.5
+peft
 pre-commit==3.2.2
 protobuf==3.20.2
 py-cpuinfo==9.0.0
@@ -17,5 +18,6 @@ sentencepiece==0.1.98
 tiktoken==0.5.2
 timm==1.0.3
 transformers==4.53.1
+ujson
 wandb==0.21.0
 wrapt==1.16.0

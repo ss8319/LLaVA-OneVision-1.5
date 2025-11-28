@@ -1,6 +1,6 @@
 import copy
 import os
-from typing import Dict
+from typing import Dict, Union
 import torch
 import transformers
 import ujson as json
@@ -70,7 +70,7 @@ class GRPODataset(Dataset):
 
     def __init__(
         self,
-        data_path: str | list,
+        data_path: Union[str, list],
         processor: transformers.ProcessorMixin,
         data_args: DataArguments,
         model_id,

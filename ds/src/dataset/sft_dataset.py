@@ -5,6 +5,8 @@ import torch
 import transformers
 import ujson as json
 from torch.utils.data import Dataset
+from pathlib import Path
+import glob
 
 from src.params import DataArguments
 from src.constants import (
@@ -34,17 +36,39 @@ class SupervisedDataset(Dataset):
         super(SupervisedDataset, self).__init__()
         self.data_path = data_path
 
-        if data_path.endswith(".jsonl"):
-            list_data_dict = []
-            with open(data_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    list_data_dict.append(line)
-
-        else:
-            if isinstance(data_path, str):
+        if isinstance(data_path, list):
+            # If data_path is already a list, use it directly
+            list_data_dict = data_path
+        elif isinstance(data_path, str):
+            if data_path.endswith(".jsonl"):
+                list_data_dict = []
+                with open(data_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        list_data_dict.append(line)
+            elif os.path.isfile(data_path):
+                # Single JSON file
                 list_data_dict = json.load(open(data_path, "r"))
+            elif os.path.isdir(data_path):
+                # Directory: find all JSON files recursively
+                list_data_dict = []
+                json_files = glob.glob(os.path.join(data_path, "**/*.json"), recursive=True)
+                json_files.sort()  # Sort for reproducibility
+                for json_file in json_files:
+                    try:
+                        with open(json_file, 'r', encoding='utf-8') as f:
+                            file_data = json.load(f)
+                            if isinstance(file_data, list):
+                                list_data_dict.extend(file_data)
+                            else:
+                                list_data_dict.append(file_data)
+                    except Exception as e:
+                        print(f"Warning: Failed to load {json_file}: {e}")
+                        continue
+                print(f"Loaded {len(list_data_dict)} items from {len(json_files)} JSON files in {data_path}")
             else:
-                list_data_dict = data_path
+                raise ValueError(f"data_path must be a file, directory, or list, got: {data_path}")
+        else:
+            raise ValueError(f"data_path must be str or list, got: {type(data_path)}")
 
         self.model_id = model_id
         self.processor = processor
@@ -65,7 +89,7 @@ class SupervisedDataset(Dataset):
         return len(self.list_data_dict)
 
     def _get_item(self, i):
-        if self.data_path.endswith('.jsonl'):
+        if isinstance(self.data_path, str) and self.data_path.endswith('.jsonl'):
             line = self.list_data_dict[i]
             sources = json.loads(line.strip())
         else:
@@ -88,9 +112,26 @@ class SupervisedDataset(Dataset):
             images = []
             
             for image_file in image_files:
-                if not os.path.exists(image_file):
-                    if not image_file.startswith("http"):
+                # Handle absolute paths, HTTP URLs, and relative paths
+                if image_file.startswith("http"):
+                    # HTTP URL - use as-is
+                    pass
+                elif os.path.isabs(image_file) and os.path.exists(image_file):
+                    # Absolute path that exists - use as-is
+                    pass
+                elif image_folder:
+                    # Relative path - resolve using image_folder
+                    # Handle paths like "images/public/file.png" or just "file.png"
+                    if image_file.startswith("images/"):
+                        # Remove "images/" prefix and join with image_folder
                         image_file = os.path.join(image_folder, image_file)
+                    else:
+                        # Direct filename - join with image_folder
+                        image_file = os.path.join(image_folder, image_file)
+                else:
+                    # No image_folder specified - try as-is
+                    pass
+                
                 images.append(get_image_info(image_file, self.image_min_pixel, self.image_max_pixel, self.image_resized_w, self.image_resized_h))
 
         elif "video" in sources:
